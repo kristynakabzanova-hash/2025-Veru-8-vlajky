@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vlajky – klikni správně</title>
+  <style>
+    :root{
+      --bg:#0b0f17; --card:#121a27; --text:#e8eefc; --muted:#a9b4cc;
+      --ok:#33d17a; --bad:#ff6b6b; --accent:#7aa2ff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#070a10 0%, #0b0f17 45%, #0b0f17 100%);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .wrap{width:min(980px,100%);}
+    .top{
+      background:rgba(18,26,39,.9);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      padding:18px 18px 14px;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    h1{font-size:18px; margin:0 0 8px; font-weight:650; letter-spacing:.2px;}
+    .promptRow{display:flex; gap:12px; align-items:baseline; flex-wrap:wrap;}
+    .label{color:var(--muted); font-size:14px;}
+    .prompt{
+      font-size:26px;
+      font-weight:800;
+      letter-spacing:.3px;
+      color:var(--accent);
+      text-shadow:0 6px 18px rgba(122,162,255,.25);
+    }
+    .status{
+      margin-top:8px; font-size:14px; min-height:20px;
+      color:var(--muted);
+    }
+    .status.ok{color:var(--ok)}
+    .status.bad{color:var(--bad)}
+    .grid{
+      margin-top:14px;
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:14px;
+    }
+    .flagBtn{
+      background:rgba(18,26,39,.85);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:10px;
+      cursor:pointer;
+      transition:transform .08s ease, border-color .15s ease, box-shadow .15s ease;
+      box-shadow:0 8px 22px rgba(0,0,0,.25);
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .flagBtn:active{transform:scale(.98)}
+    .flagBtn:hover{border-color:rgba(122,162,255,.55)}
+    .flagImg{
+      width:100%;
+      height:150px;
+      object-fit:cover;
+      border-radius:12px;
+      display:block;
+      background:#0a0e16;
+    }
+    .foot{
+      margin-top:16px;
+      text-align:center;
+      padding:14px 12px;
+      background:rgba(18,26,39,.6);
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius:16px;
+    }
+    .clueTitle{color:var(--muted); font-size:14px; margin-bottom:6px;}
+    .clue{
+      font-size:28px; font-weight:900; letter-spacing:.3px;
+      display:none;
+    }
+    .clue.show{display:block}
+    @media (max-width:760px){
+      .grid{grid-template-columns:repeat(2, minmax(0,1fr));}
+      .flagImg{height:130px}
+    }
+    @media (max-width:420px){
+      .prompt{font-size:22px}
+      .flagImg{height:115px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top" aria-live="polite">
+      <h1>Vyber správnou vlajku</h1>
+
+      <div class="promptRow">
+        <div class="label">Klikni na:</div>
+        <div id="prompt" class="prompt">—</div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div id="grid" class="grid" role="group" aria-label="Vlajky"></div>
+
+      <div class="foot">
+        <div class="clueTitle">Nápověda:</div>
+        <div id="clue" class="clue">Zimostráz</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Images expected in the same folder as index.html:
+    // Egypt.png, Yemen.png, Iraq.png, Syria.png, Palestine.png, Sudan.png
+
+    const COUNTRIES = [
+      { id: "egypt",     name: "Egypt",     img: "Egypt.png" },
+      { id: "yemen",     name: "Jemen",     img: "Yemen.png" },
+      { id: "iraq",      name: "Irák",      img: "Iraq.png"  },
+      { id: "syria",     name: "Sýrie (vlajka do roku 2024)",     img: "Syria.png" },
+      { id: "palestine", name: "Palestina", img: "Palestine.png" },
+      { id: "sudan",     name: "Súdán",     img: "Sudan.png" },
+    ];
+
+    const promptEl = document.getElementById("prompt");
+    const gridEl   = document.getElementById("grid");
+    const statusEl = document.getElementById("status");
+    const clueEl   = document.getElementById("clue");
+
+    let sequence = [];
+    let step = 0;
+    let solved = false;
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function setStatus(text, kind = "") {
+      statusEl.textContent = text || "";
+      statusEl.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function renderFlags() {
+      const displayOrder = shuffle(COUNTRIES);
+      gridEl.innerHTML = "";
+
+      for (const c of displayOrder) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "flagBtn";
+        btn.dataset.id = c.id;
+        btn.setAttribute("aria-label", `Vlajka: ${c.name}`);
+
+        const img = document.createElement("img");
+        img.className = "flagImg";
+        img.src = c.img;
+        img.alt = `Vlajka ${c.name}`;
+        img.loading = "eager";
+        img.draggable = false;
+
+        btn.appendChild(img);
+        btn.addEventListener("click", () => onPick(c.id));
+        gridEl.appendChild(btn);
+      }
+    }
+
+    function updatePrompt() {
+      if (solved) {
+        promptEl.textContent = "Hotovo!";
+        return;
+      }
+      const currentId = sequence[step];
+      const current = COUNTRIES.find(c => c.id === currentId);
+      promptEl.textContent = current ? current.name : "—";
+    }
+
+    function newRound(message = "") {
+      sequence = shuffle(COUNTRIES.map(c => c.id));
+      step = 0;
+      solved = false;
+
+      clueEl.classList.remove("show");
+      setStatus(message, message ? "bad" : "");
+
+      renderFlags();
+      updatePrompt();
+    }
+
+    function win() {
+      solved = true;
+      clueEl.classList.add("show");
+      setStatus("Správně! Nápověda odemčena.", "ok");
+      updatePrompt();
+    }
+
+    function onPick(pickedId) {
+      if (solved) return;
+
+      const expectedId = sequence[step];
+
+      if (pickedId === expectedId) {
+        step++;
+        if (step >= sequence.length) {
+          win();
+        } else {
+          setStatus("Správně. Pokračuj…", "ok");
+          updatePrompt();
+        }
+      } else {
+        newRound("Špatně! Začni znovu.");
+      }
+    }
+
+    // Start
+    newRound("");
+  </script>
+</body>
+</html>
